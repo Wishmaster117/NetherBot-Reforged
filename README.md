@@ -7,6 +7,8 @@ I decided to enhance it by fixing bugs and adding missing features.
 
 All NPCBot operations are now driven entirely through the in-game interface—no more typing out bot commands—while still offering the familiar /netherbot show / /netherbot hide chat commands and a handy minimap button to toggle the window.
 
+⚠️ **Note: This addon is still in active development and may undergo breaking changes.**
+
 ## What’s New
 
 - **Fully UI-Driven**  
@@ -17,6 +19,9 @@ All NPCBot operations are now driven entirely through the in-game interface—no
 
 - **Enhanced Localization**  
   Locale detection and translations happen automatically in the interface—no manual locale flags required.
+
+- **Custom Bot Creation Interface**
+- Design and create your own NPCBots entirely through the UI: set name, class, race, gender, model appearance, sound set, and equipment templates without typing a single command.  
 
 ---
 
@@ -36,8 +41,11 @@ All NPCBot operations are now driven entirely through the in-game interface—no
 | Toggle UI via chat     | `/netherbot show` / `/netherbot hide`|
 | Manage Bots            | Open the window—use tabs & buttons   |
 
+---
+
+## Preview
 
 ![Preview 1](./images/netherbot1.png)
-![Preview 2](./images/netherbot2.png)
+![Preview 2](./images/Netherbot2.png)
 ![Preview 3](./images/netherbot3.png)
 ![Preview 4](./images/netherbot4.png)
