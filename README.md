@@ -36,3 +36,8 @@ All NPCBot operations are now driven entirely through the in-game interface—no
 | Toggle UI via chat     | `/netherbot show` / `/netherbot hide`|
 | Manage Bots            | Open the window—use tabs & buttons   |
 
+
+![Preview 1](./images/netherbot1.png)
+![Preview 2](./images/netherbot2.png)
+![Preview 3](./images/netherbot3.png)
+![Preview 4](./images/netherbot4.png)
