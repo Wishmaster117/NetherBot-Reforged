@@ -1,0 +1,25 @@
+## Interface: 30300
+## Title: NetherBot
+## Notes: NetherBot - npcbot tool
+## Author: NetherstormX
+## Version: 1.1
+## SavedVariables: NetherbotDB
+
+Libs\Ace3\AceLocale-3.0\AceLocale-3.0.lua
+libs\Ace3\AceGUI-3.0\AceGUI-3.0.lua
+Libs\Ace3\AceAddon-3.0\AceAddon-3.0.lua
+Libs\Ace3\AceConsole-3.0\AceConsole-3.0.lua
+Libs\Ace3\AceEvent-3.0\AceEvent-3.0.lua
+
+
+locale\enUS.lua
+locale\frFR.lua
+
+locale\zhCN.lua
+locale\zhTW.lua
+locale\itIT.lua
+locale\grGR.lua
+
+data\data.lua
+
+netherbot.lua
