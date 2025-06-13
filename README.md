@@ -1,4 +1,4 @@
-# NetherBot-Reforged
+# NetherBot-Reforged Tool for  [trickerer/Trinity-Bots](https://github.com/trickerer/Trinity-Bots)
 Reforge of NetherstormX’s NetherBot Add-on
 
 NetherBot, originally created by NetherstormX, is an add-on for NPCBots on TrinityCore and AzerothCore 3.3.5 that provides quick and easy access to various bot-related commands.
