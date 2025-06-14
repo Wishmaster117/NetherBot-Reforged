@@ -22,6 +22,11 @@ end
 local LDB     = LibStub("LibDataBroker-1.1", true)
 local LDBIcon = LibStub("LibDBIcon-1.0",       true)
 
+-----------------------------------------------------------------
+-- Variables d'erreur
+-----------------------------------------------------------------
+local ERR_SELECT_BOT = i18n("Error_SelectBot")
+
 --------------------------------------------------------------------
 --  Patch Module création de Bots
 --------------------------------------------------------------------
@@ -176,29 +181,10 @@ end
 
 nameBox:SetCallback("OnTextChanged", changed)  -- pour mettre à jour le Nom
 changed()  -- affichage initial
-----------------------------------------------------------------
-
-  -- Callbacks pour MAJ des ranges -------------------------------
-  -- local function refreshRanges() updateVisualDropdowns(ddRace:GetValue(), ddGender:GetValue(), ddSkin, ddFace, ddHair, ddHairC, ddFeat) end
-  -- ddRace:SetCallback("OnValueChanged", refreshRanges)
-  -- ddGender:SetCallback("OnValueChanged", refreshRanges)
 
   ----------------------------------------------------------------
   -- Bouton Créer
   ----------------------------------------------------------------
-  -- local btnCreate = AceGUI:Create("Button"); btnCreate:SetText(i18n("BOT_CREATE8BUTTON")); btnCreate:SetWidth(120)
-  -- btnCreate:SetCallback("OnClick", function()
-  --   local name = (nameBox:GetText() or ""):gsub("%s+","_")
-  --   local class,race,gender = ddClass:GetValue(), ddRace:GetValue(), ddGender:GetValue()
-  --   local skin,face,hair,hc,feat,ss = ddSkin:GetValue(), ddFace:GetValue(), ddHair:GetValue(), ddHairC:GetValue(), ddFeat:GetValue(), ddSS:GetValue()
-  --   if name=="" or not (class and race and gender and skin and face and hair and hc and feat and ss) then
-  --     print("|cffff0000[NetherBot]|r Remplissez tous les champs."); return
-  --   end
-  --   local cmd = string.format(".npcbot createnew %s %d %d %d %d %d %d %d %d %d", name, class, race, gender, skin, face, hair, hc, feat, ss)
-  --   -- SendChatMessage(cmd, "SAY")
-	 --print("Commande envoyée : " ..cmd)
-  --   f:Hide()
-  -- end)
   local btnCreate = AceGUI:Create("Button"); btnCreate:SetText(i18n("BOT_CREATE8BUTTON"))
   btnCreate:SetWidth(120)
 btnCreate:SetCallback("OnClick", function()
@@ -338,6 +324,11 @@ StaticPopupDialogs["NB_DEL_FREE_CONFIRM"] = {
 local infoBuffer = {}          -- stocke toutes les lignes capturées
 local lookupBuffer = {}          -- Lookup-List
 
+-- Variables pour lists
+local otherBuffer      = {}    -- stocke chaque ligne “list spawned…”
+local otherFrame       = nil   -- la fenêtre Ace
+local otherContainer   = nil   -- le ScrollFrame interne
+
 -- utilitaires
 local function trim(s)  return (s:gsub("^%s*(.-)%s*$","%1")) end
 
@@ -412,7 +403,7 @@ end
 --------------------------------------------------------------------
 function NetherBot:AddLookupWidget(line)
 
-  -- 1. On retire proprement les codes de lien « |Hcreature_entry:…|h »
+  -- 1. On retire les codes de lien « |Hcreature_entry:…|h »
   line = line:gsub("|Hcreature_entry:%d+|h", "")   -- enlève l’ouvre-lien
                :gsub("|h", "")                     -- enlève le |h fermant
 
@@ -427,9 +418,7 @@ if id and name then
 
   -- 4) Zone texte (EditBox figé)
   local eb = AceGUI:Create("EditBox")
-  -- eb:SetLabel("ID BOT : "..id)          -- étiquette jaune
   eb:SetLabel( i18n("LOOKUP_ID_LABEL").." : "..id )
-  -- eb:SetText(("Nom: %s    Race: %s"):format(name, (race ~= "" and race or "—")))
   local nomLabel  = i18n("LOOKUP_NAME_LABEL")  ..": ".. name
   local raceLabel = i18n("LOOKUP_RACE_LABEL") ..": ".. (race ~= "" and race or "—")
   eb:SetText( ("%s    %s"):format(nomLabel, raceLabel) )
@@ -445,7 +434,7 @@ if id and name then
   btn:SetText(i18n("B_INVOQUER"))
   btn:SetWidth(80)
   btn:SetHeight(19)
-  btn.frame:GetNormalTexture():SetVertexColor(0.10, 1.00, 0.10) -- couleur verte pour le bouton
+  -- btn.frame:GetNormalTexture():SetVertexColor(0.10, 1.00, 0.10) -- couleur verte pour le bouton
   btn:SetCallback("OnClick", function()
     SendChatMessage(".npcbot spawn "..id, "SAY")
   end)
@@ -502,6 +491,141 @@ function NetherBot:ShowInfoWindow()
   self.infoFrame:Show()
 end
 
+------------------------------------------------------------------
+-- Parseur list spawned / free
+------------------------------------------------------------------
+local function parseSpawnedLine(line)
+  local id, name, class, lvl, loc, state =
+        line:match('^%s*%d+%)%s*(%d+):%s*([^%-]+)%s*%-%s*([^%-]+)%s*%-%s*level%s*(%d+)%s*%-%s*"([^"]+)"%s*%-%s*(.+)$')
+  if not id then
+        -- variante sans le bloc - état
+        id, name, class, lvl, loc =
+          line:match('^%s*%d+%)%s*(%d+):%s*([^%-]+)%s*%-%s*([^%-]+)%s*%-%s*level%s*(%d+)%s*%-%s*"([^"]+)"')
+  end
+  return id, (name or ""):gsub("%s*$",""),
+             (class or ""):gsub("%s*$",""), lvl, loc, state
+end
+
+--------------------------------------------------------------------
+-- Widget capture liste Bots spawned
+--------------------------------------------------------------------
+--[[function NetherBot:AddSpawnedWidget(line)
+  local id, name, class, lvl, loc, state = parseSpawnedLine(line)
+  if not id then return end                          -- pas une ligne cible
+
+  -- Couleur de classe Blizzard
+  local clsKey = class:upper():gsub("%s","")
+  local col    = RAID_CLASS_COLORS[clsKey] or {r=1,g=1,b=1}
+  local hex    = ("%02x%02x%02x"):format(col.r*255,col.g*255,col.b*255)
+
+  --------------------- conteneur horizontal ----------------------
+  local row = AceGUI:Create("SimpleGroup")
+  row:SetLayout("Flow"); row:SetFullWidth(true)
+
+  --------------------- EditBox figé ------------------------------
+  local eb  = AceGUI:Create("EditBox")
+  local font, size, flag = eb.editbox:GetFont()
+  eb.editbox:SetFont(font, size - 5, flag)  -- -2 = police un peu plus petite
+  eb:SetLabel( ("%s : %s"):format(i18n("BOT_ID"), id) )
+
+  local txt = ("%s: %s    %s: |cff%s%s|r    %s: %s    %s: %s%s")
+              :format( i18n("NAME_LABEL"),  name,
+                        i18n("CLASS_LABEL"), hex, class,
+                        i18n("LEVEL_LABEL"), lvl,
+                        i18n("LOCATION_LABEL"), loc or "—",
+                        state and ("    "..i18n("STATE_LABEL")..": "..state) or "")
+
+  eb:SetText(txt)
+  eb:SetRelativeWidth(0.78)
+  eb:DisableButton(true); eb:SetDisabled(true)
+  eb.label  :SetTextColor(1, 1, 0)   -- jaune
+  eb.editbox:SetTextColor(1,1,1)
+
+  --------------------- Bouton Spawn ------------------------------
+  local btn = AceGUI:Create("Button")
+  btn:SetText(i18n("Move"))
+  btn:SetWidth(80)
+  btn:SetHeight(19)
+  btn:SetCallback("OnClick", function()
+        SendChatMessage(".npcbot move "..id, "SAY")
+      end)  	
+  --------------------- Assemblage -------------------------------
+  row:AddChild(eb)
+  row:AddChild(btn)
+  otherContainer:AddChild(row)
+end]]
+function NetherBot:AddSpawnedWidget(line)
+  local id, name, class, lvl, loc, state = parseSpawnedLine(line)
+  if not id then return end                               -- ligne hors-format
+
+  -- ---------- couleur de classe Blizzard ----------
+  local clsKey = class:upper():gsub("%s","")
+  local col    = RAID_CLASS_COLORS[clsKey] or {r=1,g=1,b=1}
+  local hex    = ("%02x%02x%02x"):format(col.r*255,col.g*255,col.b*255)
+
+  -- ---------- conteneur horizontal ----------
+  local row = AceGUI:Create("SimpleGroup")
+  row:SetLayout("Flow")
+  row:SetFullWidth(true)
+
+  -- ---------- EditBox figé ----------
+  local eb = AceGUI:Create("EditBox")
+  local font, _, flag = eb.editbox:GetFont()
+  eb.editbox:SetFont(font, 10, flag)
+  eb:SetLabel( ("%s : %s"):format(i18n("BOT_ID"), id) )
+
+  local txt = ("%s: %s    %s: |cff%s%s|r    %s: %s    %s: %s%s")
+              :format( i18n("NAME_LABEL"),   name,
+                        i18n("CLASS_LABEL"), hex,  class,
+                        i18n("LEVEL_LABEL"), lvl,
+                        i18n("LOCATION_LABEL"), loc or "—",
+                        state and ("    "..i18n("STATE_LABEL")..": "..state) or "" )
+
+  eb:SetText(txt)
+  -- eb:SetRelativeWidth(0.82)           -- laisse ~40 % pour les 3 boutons
+  eb:SetFullWidth(true)
+  eb:DisableButton(true); eb:SetDisabled(true)
+  eb.label  :SetTextColor(1,1,0)
+  eb.editbox:SetTextColor(1,1,1)
+
+  -- ------------------------------------------------------------------
+  --  Petit helper local pour créer un bouton homogène (+ tooltip)
+  ---------------------------------------------------------------------
+  local function makeSmallBtn(labelKey, tooltipKey, clickFn)
+    local b = AceGUI:Create("Button")
+    b:SetText(i18n(labelKey))
+    b:SetRelativeWidth(0.13)          -- 3 boutons × 13 % ≈ 39 %
+    b:SetHeight(19)
+
+    b:SetCallback("OnClick", clickFn)
+
+    b:SetCallback("OnEnter", function(widget)
+        GameTooltip:SetOwner(widget.frame,"ANCHOR_RIGHT")
+        GameTooltip:SetText(i18n(labelKey),1,1,0)
+        GameTooltip:AddLine(i18n(tooltipKey),1,1,1,true)
+        GameTooltip:Show()
+      end)
+    b:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+    return b
+  end
+
+  -- ---------- Bouton « Move » ----------
+  local btnMove = makeSmallBtn("Move", "MOVE_TOOLTIP", function()
+                     SendChatMessage(".npcbot move "..id, "SAY")
+                   end)
+
+  -- ---------- Bouton « Go » ----------
+  local btnGo   = makeSmallBtn("Bot_Go", "Bot_Go_tooltip", function()
+                     SendChatMessage(".npcbot go "..id, "SAY")
+                   end)
+
+  -- ---------- Assemblage ----------
+  row:AddChild(eb)
+  row:AddChild(btnMove)
+  row:AddChild(btnGo)
+  otherContainer:AddChild(row)
+end
+
 --------------------------------------------------------------------
 --  FRAME D'AFFICHAGE DE LA CAPTURE DE LA LISTE DES BOTS
 --------------------------------------------------------------------
@@ -511,7 +635,7 @@ function NetherBot:ShowLookupWindow(title)
     f:SetTitle(title or "Lookup-List")
     f:SetLayout("Fill")
 	f:SetStatusText(i18n("LOOKUP_STATUS"))
-    f:SetWidth(480); f:SetHeight(420)
+    f:SetWidth(520); f:SetHeight(420)
     f:SetCallback("OnClose", function(w)
       AceGUI:Release(w)
       self.lookupFrame, self.lookupContainer = nil, nil
@@ -545,6 +669,14 @@ function NetherBot:OnChatMsg(_, msg)
     table.insert(lookupBuffer, msg)
     self:AddLookupWidget(msg)
   end
+  -- Liste spawned
+  if otherContainer then
+  -- on garde tout (pour réafficher plus tard)…
+  table.insert(otherBuffer, msg)
+  -- …et on crée un widget à la volée
+  self:AddSpawnedWidget(msg)
+  end
+
 end
 -- FIN CAPTURE
 
@@ -591,7 +723,7 @@ function NetherBot:OnEnable()
   LDBIcon:Register("NetherBot", dataObj, self.db.profile.minimapIcon)
 end
 
--- Optionnel : commande pour toggle l’icône
+-- commande pour toggle l’icône
 function NetherBot:ToggleMinimap()
   local iconDB = self.db.profile.minimapIcon
   iconDB.hide = not iconDB.hide
@@ -599,14 +731,6 @@ function NetherBot:ToggleMinimap()
 end
 NetherBot:RegisterChatCommand("nbminimap", "ToggleMinimap")
 
--- 2) handler unifié
--- function NetherBot:OnChatMsg(_, msg)
---   table.insert(infoBuffer, msg)           -- on mémorise
---   -- si la fenêtre est ouverte, on ajoute la ligne à chaud
---   if self.infoContainer then
---     self:AddInfoWidget(msg)
---   end
--- end
 
 function NetherBot:HandleSlash(msg)
   msg = (msg or ""):lower()
@@ -615,20 +739,12 @@ function NetherBot:HandleSlash(msg)
   else self:Print("/netherbot show  –  /netherbot hide") end
 end
 
--- ▶ pré-déclaration pour que Lua sache qu’il existe localement
+-- pré-déclaration pour que Lua sache qu’il existe localement
 -- local initializeFramesAndBars
 initializeFramesAndBars = nil
 
--- ---------- helpers ----------
--- local function addButton(parent, label, w, cb)
---   local b = AceGUI:Create("Button")
---   b:SetText(label); b:SetWidth(w or 110)
---   b:SetCallback("OnClick", cb)
---   parent:AddChild(b)
--- end
-
 -- Maintenant avec un paramètre tooltipText en option
-local function addButton(parent, label, w, cb, tooltipText)
+--[[local function addButton(parent, label, w, cb, tooltipText)
   local b = AceGUI:Create("Button")
   b:SetText(label)
   b:SetWidth(w or 110)
@@ -649,48 +765,46 @@ local function addButton(parent, label, w, cb, tooltipText)
 
   parent:AddChild(b)
   return b
+end]]
+local function addButton(parent, labelKey, widthWanted, onClick, tooltipText)
+  local b = AceGUI:Create("Button")
+
+  ------------------------------------------------------------
+  -- 1) Texte + callback
+  ------------------------------------------------------------
+  b:SetText(i18n(labelKey))
+  b:SetAutoWidth(true)                   -- largeur sur le texte
+  b:SetCallback("OnClick", onClick)
+
+  ------------------------------------------------------------
+  -- 2) Largeur minimale éventuelle
+  ------------------------------------------------------------
+  if type(widthWanted) == "number" then               -- sécurité !
+    if b.frame:GetWidth() < widthWanted then
+      b:SetWidth(widthWanted)
+    end
+  end
+
+  ------------------------------------------------------------
+  -- 3) Tooltip (optionnel)
+  ------------------------------------------------------------
+  if tooltipText then
+    b:SetCallback("OnEnter", function(widget)
+      GameTooltip:SetOwner(widget.frame,"ANCHOR_RIGHT")
+      GameTooltip:SetText(i18n(labelKey),1,1,0)
+      GameTooltip:AddLine(tooltipText,1,1,1,true)
+      GameTooltip:Show()
+    end)
+    b:SetCallback("OnLeave", GameTooltip_Hide)
+  end
+
+  parent:AddChild(b)
+  return b
 end
 
-
--- helper amélioré
--- local function addButton(parent, label, widthOrCb, maybeCb)
---   local cb, minWidth
---   if type(widthOrCb) == "function" then
---     -- signature (parent, label, cb)
---     cb       = widthOrCb
---     minWidth = 0
---   else
---     -- signature (parent, label, minWidth, cb)
---     minWidth = widthOrCb or 0
---     cb       = maybeCb
---   end
--- 
---   -- création et labellisation
---   local b = AceGUI:Create("Button")
---   b:SetText(label)
---   b:SetCallback("OnClick", cb)
---   parent:AddChild(b)
--- 
---   -- **ici** on récupère bien le FS interne  
---   -- (c’est celui qu’AceGUI a créé pour afficher le texte)
---   local fs = b.text or b.button:GetFontString()
---   local textWidth = fs:GetStringWidth()
--- 
---   -- marge « padding » à gauche+droite, ajustez si besoin
---   local padding = 24  
---   local finalW = math.max(textWidth + padding, minWidth)
--- 
---   b:SetWidth(finalW)
--- 
---   -- on refait le layout Flow si besoin
---   if parent.type == "Flow" then
---     parent:DoLayout()
---   end
---   
---   return b
--- end
-
--- ---------- main GUI ----------
+--------------------------------------------------------------------
+--  Main GUI
+--------------------------------------------------------------------
 function NetherBot:ShowGUI()
 if self.gui then                  -- le widget existe déjà
     self.gui:Show()               -- on le ré-affiche
@@ -699,16 +813,16 @@ end
 
   local f = AceGUI:Create("Frame")
   f:SetTitle(i18n("NetherBot_title")); f:SetStatusText(i18n("Version"))
-  f:SetLayout("Flow")          -- ① on repasse en Flow
-  f:SetWidth(400); f:SetHeight(350)
-  f.frame:SetResizable(true); f.frame:SetMinResize(400,300)
+  f:SetLayout("Flow")
+  f:SetWidth(400); f:SetHeight(400)
+  f.frame:SetResizable(true); f.frame:SetMinResize(400,400)
   f.frame:SetScale(self.db.profile.scale or 1)
   f:SetCallback("OnClose", function(w)
     AceGUI:Release(w)
-    self.gui = nil                -- signale que le widget n’existe plus
+    self.gui = nil
 end)
   self.gui = f
-  -- RÉCUPÈRE la frame qu’on a créée plus bas
+
   local af = _G["NetherbotAdminFrame"]
   if af then
     af:ClearAllPoints()
@@ -716,18 +830,18 @@ end)
   end
 
   -------------------------------------------------- ligne 1
-  addButton(f,i18n("Follow"),90,function() SendChatMessage(".npcbot command follow","SAY") end, i18n("Follow_tooltip"))
-  addButton(f,i18n("Stand"), 90,function() SendChatMessage(".npcbot command standstill","SAY") end, i18n("Stand_tooltip"))
-  addButton(f,i18n("Stop"),  90,function() SendChatMessage(".npcbot command stopfully","SAY") end, i18n("Stop_tooltip"))
-  addButton(f,i18n("Slack"), 90,function() SendChatMessage(".npcbot command follow only","SAY") end, i18n("Slack_tooltip"))
+  addButton(f, "Follow",90,function() SendChatMessage(".npcbot command follow","SAY") end, i18n("Follow_tooltip"))
+  addButton(f, "Stand", 90,function() SendChatMessage(".npcbot command standstill","SAY") end, i18n("Stand_tooltip"))
+  addButton(f, "Stop",  90,function() SendChatMessage(".npcbot command stopfully","SAY") end, i18n("Stop_tooltip"))
+  addButton(f, "Slack", 90,function() SendChatMessage(".npcbot command follow only","SAY") end, i18n("Slack_tooltip"))
 
   local sep = AceGUI:Create("Heading"); sep:SetFullWidth(true); f:AddChild(sep)
 
   -------------------------------------------------- ligne 2
-  addButton(f,i18n("UnHide"),90,function() SendChatMessage(".npcbot unhide","SAY") end, i18n("UnHide_tooltip"))
-  addButton(f,i18n("Hide"),  90,function() SendChatMessage(".npcbot hide","SAY") end, i18n("Hide_tooltip"))
-  addButton(f,i18n("Recall"),90,function() SendChatMessage(".npcbot recal teleport","SAY") end, i18n("Recall_tooltip"))
-  addButton(f,i18n("Unbind"),90,function() SendChatMessage(".npcbot command unbind","SAY") end, i18n("Unbind_tooltip"))
+  addButton(f, "UnHide",90,function() SendChatMessage(".npcbot unhide","SAY") end, i18n("UnHide_tooltip"))
+  addButton(f, "Hide",  90,function() SendChatMessage(".npcbot hide","SAY") end, i18n("Hide_tooltip"))
+  addButton(f, "Recall",90,function() SendChatMessage(".npcbot recall teleport","SAY") end, i18n("Recall_tooltip"))
+  addButton(f, "Unbind",90,function() SendChatMessage(".npcbot command unbind","SAY") end, i18n("Unbind_tooltip"))
 
   sep = AceGUI:Create("Heading"); sep:SetFullWidth(true); f:AddChild(sep)
 
@@ -738,26 +852,43 @@ end)
 
   sep = AceGUI:Create("Heading"); sep:SetFullWidth(true); f:AddChild(sep)
 
+  -------------------------------------------------- ligne 3.1
+  addButton(
+	f,
+	"GearScore",
+	110,
+	function()
+		local tgt = UnitName("target")
+		if tgt then
+		ChatFrame1EditBox:SetText(".npcbot gs")
+		ChatEdit_SendText(ChatFrame1EditBox, 0)
+		else
+		print("|cffff0000[NetherBot]|r " .. ERR_SELECT_BOT)
+		end
+	end,
+	i18n("GearScore_tooltip")   -- texte d’aide existant
+  )
+  
+  sep = AceGUI:Create("Heading"); sep:SetFullWidth(true); f:AddChild(sep)
+  
   -------------------------------------------------- ligne 4
-  addButton(f,i18n("Spawn Bot"),120,function() self:SpawnDialog() end, i18n("Spanw_bot_tooltip"))
-  addButton(f,i18n("Revive"),    120,function() SendChatMessage(".npcbot revive","SAY") end, i18n("Revive_tooltip"))
+  addButton(f, "Spawn Bot",120,function() self:SpawnDialog() end, i18n("Spanw_bot_tooltip"))
+  addButton(f, "Revive",    120,function() SendChatMessage(".npcbot revive","SAY") end, i18n("Revive_tooltip"))
 
   sep = AceGUI:Create("Heading"); sep:SetFullWidth(true); f:AddChild(sep)
 
   -------------------------------------------------- ligne 5
-  -- addButton(f,i18n("Admin"), 80,function() ToggleFrame(NetherbotAdminFrame) end, i18n("Admin_tooltip"))
-  addButton(f, i18n("Admin"), 80, function() NetherBot:ToggleAdminFrame() end, i18n("Admin_tooltip"))
-  -- addButton(f,"Lookup",      80,function() ToggleFrame(NetherbotLookupFrame) end, i18n("Lookup_tooltip"))
-  addButton(f,i18n("Lookup"), 100, function() NetherBot:ToggleLookupFrame() end, i18n("Lookup_tooltip"))
-  addButton(f,i18n("RaidFrame"),   100,function()
+  addButton(f, "Admin", 80, function() NetherBot:ToggleAdminFrame() end, i18n("Admin_tooltip"))
+  addButton(f,"Lookup", 100, function() NetherBot:ToggleLookupFrame() end, i18n("Lookup_tooltip"))
+  addButton(f,"RaidFrame",   100,function()
                                if TeamFrame:IsShown() then TeamFrame:Hide()
                                else initializeFramesAndBars(); TeamFrame:Show() end
                              end, i18n("Raidframe_tooltip"))
   -------------------------------------------------- ligne 6
   
   sep = AceGUI:Create("Heading"); sep:SetFullWidth(true); f:AddChild(sep)
-   -- === NOUVEAU BOUTON “Autres Commandes” ===
-  addButton(f, i18n("OTHER_COMMANDS"), 175, 
+  
+  addButton(f, "OTHER_COMMANDS", 175, 
     function()
       if not NetherBot.otherFrame then
         NetherBot:CreateOtherCommandsFrame()
@@ -831,206 +962,61 @@ end
 --  FRAME AUTRES COMMANDES
 --------------------------------------------------------------------
 function NetherBot:CreateOtherCommandsFrame()
-  local frame = AceGUI:Create("Frame")
-  frame:SetTitle(i18n("OTHER_COMMANDS"))
-  frame:SetLayout("Flow")
-  frame:SetWidth(200)
-  frame:SetHeight(120)
-  frame:SetCallback("OnClose", function(w)
-    AceGUI:Release(w)
-    self.otherFrame = nil
-  end)
-  if self.gui then
-    frame.frame:SetPoint("LEFT", self.gui.frame, "RIGHT", 10, 0)
+  if otherFrame then otherFrame:Show() return end   -- déjà ouverte
+
+  local f = AceGUI:Create("Frame")
+  f:SetTitle(i18n("OTHER_COMMANDS"))
+  f:SetWidth(660);  f:SetHeight(320)
+  f:SetLayout("Flow")
+  f:SetCallback("OnClose", function(w)
+        AceGUI:Release(w)
+        otherFrame, otherContainer = nil, nil
+      end)
+
+  --  positionné à droite de la GUI principale, si ouverte
+  if self.gui and self.gui.frame:IsShown() then
+    f.frame:SetPoint("LEFT", self.gui.frame, "RIGHT", 10, 0)
   end
 
-  addButton(frame, i18n("LIST_SPAWNED"), 170, function()
-    SendChatMessage(".npcbot list spawned", "SAY")
-  end, i18n("LIST_SPAWNED_TOOLTIP"))
+  -- ---  Deux boutons haut  ------------------------------
+  local function addCmdButton(label, cmd, help)
+    local b = AceGUI:Create("Button")
+    b:SetText(i18n(label))
+    b:SetWidth(200)
+    b:SetCallback("OnClick", function()
+          wipe(otherBuffer)                 -- vide l’ancien contenu
+          otherContainer:ReleaseChildren()
+          SendChatMessage(cmd, "SAY")
+        end)
+    b:SetCallback("OnEnter", function(widget)
+          GameTooltip:SetOwner(widget.frame,"ANCHOR_RIGHT")
+          GameTooltip:SetText(i18n(label),1,1,0)
+          GameTooltip:AddLine(help,1,1,1,true)
+          GameTooltip:Show()
+        end)
+    b:SetCallback("OnLeave",function() GameTooltip:Hide() end)
+    f:AddChild(b)
+  end
 
-  addButton(frame, i18n("LIST_SPAWNED_FREE"), 170, function()
-    SendChatMessage(".npcbot list spawned free", "SAY")
-  end, i18n("LIST_SPAWNED_FREE_TOOLTIP"))
+  addCmdButton("LIST_SPAWNED",       ".npcbot list spawned",
+               i18n("LIST_SPAWNED_TOOLTIP"))
+  addCmdButton("LIST_SPAWNED_FREE",  ".npcbot list spawned free",
+               i18n("LIST_SPAWNED_FREE_TOOLTIP"))
 
-  self.otherFrame = frame
+  -- ---  ScrollFrame pour le résultat  --------------------
+  local scroll = AceGUI:Create("ScrollFrame")
+  scroll:SetLayout("List")
+  scroll:SetFullWidth(true); scroll:SetFullHeight(true)
+  f:AddChild(scroll)
+
+  --  mémos globaux
+  otherFrame, otherContainer = f, scroll
 end
 
---------------------------------------------------------------------
---  FRAME ADMIN  (ancré à la main frame)
---------------------------------------------------------------------
---[[local adminFrame = CreateFrame("Frame", "NetherbotAdminFrame", UIParent)
-adminFrame:SetSize(280, 200)
--- adminFrame:SetPoint("CENTER", UIParent, "CENTER", 220, 0)
-adminFrame:SetBackdrop({
-  bgFile   = "Interface/Tooltips/UI-Tooltip-Background",
-  edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-  tile     = true, tileSize = 16, edgeSize = 16,
-  insets   = { left = 4, right = 4, top = 4, bottom = 4 }
-})
-adminFrame:SetBackdropColor(1, 0, 0, 0.2)
-adminFrame:SetBackdropBorderColor(0, 1, 0, 1)
-adminFrame:Hide()
-
-local adminTitle = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-adminTitle:SetPoint("TOP", 0, -10)
-adminTitle:SetText(i18n("Admin"))
-
--- Bouton “X” standard pour fermer la fenêtre
-local closeAdmin = CreateFrame("Button", nil, adminFrame, "UIPanelCloseButton")
-closeAdmin:SetPoint("TOPRIGHT", adminFrame, "TOPRIGHT", -6, -6)
-closeAdmin:SetScript("OnClick", function()
-  adminFrame:Hide()
-end)
-
--- ---------- boutons Admin ----------
-local function makeAdminBtn(name, text, x, y, width, tooltipText)
-  local b = CreateFrame("Button", name, adminFrame, "UIPanelButtonTemplate")
-  b:SetSize(width or 60, 22)
-  b:SetPoint("TOPLEFT", x, y)
-  b:SetText(i18n(text))
-  b:GetNormalTexture():SetVertexColor(0.10, 1.00, 0.10)
-
-  if tooltipText then
-    b:SetScript("OnEnter", function(self)
-      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      GameTooltip:SetText(i18n(text), 1,1,0)
-      GameTooltip:AddLine(tooltipText, 1,1,1, true)
-      GameTooltip:Show()
-    end)
-    b:SetScript("OnLeave", GameTooltip_Hide)
-  end
-
-  return b
-end
-
-local bAdd    = makeAdminBtn("NB_Add"   , "Add"     , 10 , -35 , 70, i18n("Add_tooltip"))
-local bRemove = makeAdminBtn("NB_Remove", "Remove"  , 10 , -62 , 70, i18n("Remove_tooltip"))
-local bRecall   = makeAdminBtn("NB_Recall"  , "Recall"  , 85 , -35 , 70, i18n("Recall_tooltip"))
-local bInfo     = makeAdminBtn("NB_Info"    , "Bot-Info", 160, -35 , 70, i18n("Info_tooltip"))
-local bMove     = makeAdminBtn("NB_Move"    , "Move"    , 85 , -62 , 70, i18n("Move_tooltip"))
-local bDelete   = makeAdminBtn("NB_Delete"  , "Delete"  , 160, -62 , 70, i18n("Delete_tooltip"))
--- bouton “Delete Free” (supprime tous les bots libres)
-local bDeleteFree = makeAdminBtn("NB_DeleteFree", "Delete Free", 10, -89, 155, i18n("DeleteFree_tooltip"))-- 4. Add a button on the admin panel (after existing makeAdminBtn calls)
--- 4. Add a button on the admin panel (after existing makeAdminBtn calls)
-local bCreateBot = makeAdminBtn("NB_CreateBot", "CREATE_BOT", 170, -89, 90, i18n("CREATE_BOT_TOOLTIP"))
-bCreateBot:SetScript("OnClick", function() NetherBot:ShowCreateBotFrame() end)
-
---  142,              -- x = 142px à droite du coin top-left de adminFrame
---  -62,              -- y = 62px vers le bas du coin top-left de adminFrame
---  70,               -- largeur du bouton en pixels
-  
-bDeleteFree:SetScript("OnClick", function()
-  StaticPopup_Show("NB_DEL_FREE_CONFIRM")
-end)
-
-bAdd   :SetScript("OnClick", function()
-  local target = UnitName("target")
-  if target then
-	SendChatMessage(".npcbot add ", "SAY")
-  else
-    StaticPopupDialogs["NB_ADD"] = {
-      text = i18n("Enter NPCBOT ID:"),
-      button1 = "Ok", button2 = "Cancel",
-      hasEditBox = true, timeout = 0,
-      whileDead = true, hideOnEscape = true,
-      OnAccept = function(self)
-        local id = self.editBox:GetText()
-        SendChatMessage(".npcbot add "..id, "SAY")
-      end,
-    }
-    StaticPopup_Show("NB_ADD")
-  end
-end)
-
-bRemove:SetScript("OnClick", function()
-  local target = UnitName("target")
-  if target then
-    SendChatMessage(".npcbot remove "..target, "SAY")
-  else
-    StaticPopupDialogs["NB_REM"] = {
-      text = i18n("Enter NPCBOT ID:"),
-      button1 = "Ok", button2 = "Cancel",
-      hasEditBox = true, timeout = 0,
-      whileDead = true, hideOnEscape = true,
-      OnAccept = function(self)
-        local id = self.editBox:GetText()
-        SendChatMessage(".npcbot remove "..id, "SAY")
-      end,
-    }
-    StaticPopup_Show("NB_REM")
-  end
-end)
-
-bRecall:SetScript("OnClick", function() SendChatMessage(".npcbot recall", "SAY") end)
-
-bInfo  :SetScript("OnClick", function() 
-  -- reset buffer & affiche la fenêtre
-  wipe(infoBuffer)
-  NetherBot:ShowInfoWindow()
-  -- envoie la commande au bot
-  SendChatMessage(".npcbot info",   "SAY") 
-  DoEmote("BONK") 
-end)
-
-bMove  :SetScript("OnClick", function() SendChatMessage(".npcbot move",   "SAY") end)
-
--- bDelete:SetScript("OnClick", function()
---   StaticPopupDialogs["NB_DEL_CONFIRM"] = {
---     text = "Delete current target or ID",
---     button1 = "Target", button2 = "ID",
---     OnAccept = function()
---       local tgt = UnitName("target")
---       if tgt then SendChatMessage(".npcbot delete "..tgt, "SAY") end
---     end,
---     OnCancel = function()
---       StaticPopupDialogs["NB_DEL_ID"] = {
---         text = i18n("Enter NPCBOT ID:"),
---         button1 = "Ok", button2 = "Cancel",
---         hasEditBox = true, timeout = 0,
---         whileDead = true, hideOnEscape = true,
---         OnAccept = function(self)
---           local id = self.editBox:GetText()
---           SendChatMessage(".npcbot delete "..id, "SAY")
---         end,
---       }
---       StaticPopup_Show("NB_DEL_ID")
---     end,
---     timeout = 0, whileDead = true, hideOnEscape = true,
---   }
---   StaticPopup_Show("NB_DEL_CONFIRM")
--- end)
-bDelete:SetScript("OnClick", function()
-  StaticPopup_Show("NB_DEL_CONFIRM")
-end)
-
---  Bouton Sort de Resuréction rapide
-local redemptionButton = CreateFrame("Button", "NB_RedemptionButton", adminFrame, "SecureActionButtonTemplate")
-redemptionButton:SetSize(30, 30)
-redemptionButton:SetPoint("BOTTOMLEFT", 10, 10)
-local ic = redemptionButton:CreateTexture(nil, "BACKGROUND")
-ic:SetAllPoints()
-ic:SetTexture(select(3, GetSpellInfo(7328)))
-redemptionButton:SetNormalTexture(ic)
-redemptionButton:SetAttribute("type", "spell")
-redemptionButton:SetAttribute("spell", 7328)
-redemptionButton:SetScript("OnEnter", function(self)
-  GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-  GameTooltip:SetText(i18n("Revive Bots"))
-end)
-redemptionButton:SetScript("OnLeave", GameTooltip_Hide)
-redemptionButton:SetScript("OnClick", function() SendChatMessage(".npcbot revive", "SAY") end)]]
 -----------------------------------------------------------------
 --  ADMIN FRAME AceGUI
 -----------------------------------------------------------------
------------------------------------------------------------------
--- Variables d'erreur
------------------------------------------------------------------
-local ERR_SELECT_BOT = i18n("Error_SelectBot")
-
------------------------------------------------------------------
---  ADMIN FRAME
------------------------------------------------------------------
-function NetherBot:CreateAdminFrame()
+--[[function NetherBot:CreateAdminFrame()
   if self.adminAce then return self.adminAce end         -- singleton
 
   local AceGUI = LibStub("AceGUI-3.0")
@@ -1044,12 +1030,33 @@ function NetherBot:CreateAdminFrame()
   f:SetHeight(220)
   f:SetLayout("Flow")
   f.frame:SetResizable(false)
+  self.adminAce = f
+  return f
+end]]
+function NetherBot:CreateAdminFrame()
+  if self.adminAce then return self.adminAce end  -- singleton
 
-  -- même couleur que l’ancienne fenêtre
-  -- f.frame:SetBackdropColor(1,0,0,0.20)
-  -- f.frame:SetBackdropBorderColor(0,1,0,1)
+  local f = AceGUI:Create("Frame")
+  f:SetTitle(i18n("Admin"))
+  f:SetWidth(400)
+  f:SetHeight(220)
+  f:SetLayout("Flow")
+  f.frame:SetResizable(false)
 
-  -- mémo pour qu’on puisse le retrouver ailleurs
+  ----------------------------------------------------------------
+  -- Position automatique quand la fenêtre apparaît
+  ----------------------------------------------------------------
+  f.frame:HookScript("OnShow", function(frame)
+    frame:ClearAllPoints()
+    if NetherBot.gui and NetherBot.gui.frame and NetherBot.gui.frame:IsShown() then
+      -- Colle l’admin à droite de la main-frame, 10 px d’écart
+      frame:SetPoint("TOPLEFT", NetherBot.gui.frame, "TOPRIGHT", 10, 0)
+    else
+      -- Sinon, on centre l’admin à l’écran
+      frame:SetPoint("CENTER", UIParent, "CENTER")
+    end
+  end)
+
   self.adminAce = f
   return f
 end
@@ -1061,7 +1068,7 @@ function NetherBot:PopulateAdminFrame()
   local f = self:CreateAdminFrame()
   if f._populated then return end      -- on ne le fait qu’une fois
 
-  local function addBtn(label, tooltip, cb, w)
+--[[  local function addBtn(label, tooltip, cb, w)
     local b = AceGUI:Create("Button")
     b:SetText(i18n(label))
     b:SetWidth(w or 100)
@@ -1076,7 +1083,49 @@ function NetherBot:PopulateAdminFrame()
       b:SetCallback("OnLeave", function() GameTooltip:Hide() end)
     end
     f:AddChild(b)
+  end]]
+-- Helper "élastique" : la largeur s’adapte au texte
+--  ──────────────────────────────────────────────────
+--  • label     → clé de locale (ou texte brut)
+--  • tooltip   → texte de l’infobulle (facultatif)
+--  • cb        → callback OnClick
+--  • minWidth  → largeur mini souhaitée (facultatif)
+
+local function addBtn(label, tooltip, cb, minWidth)
+  local b = AceGUI:Create("Button")
+
+  ------------------------------------------------------------
+  -- 1) Texte, largeur auto et callback principal
+  ------------------------------------------------------------
+  b:SetText(i18n(label))
+  b:SetAutoWidth(true)        -- ← adapte la taille au texte localisé
+  b:SetCallback("OnClick", cb)
+
+  -- Si vous tenez à un plancher de largeur :
+  if minWidth then
+    local w = b.frame:GetWidth()
+    if w < minWidth then b:SetWidth(minWidth) end
   end
+
+  ------------------------------------------------------------
+  -- 2) Infobulle (inchangé)
+  ------------------------------------------------------------
+  if tooltip then
+    b:SetCallback("OnEnter", function(widget)
+      GameTooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")
+      GameTooltip:SetText(i18n(label), 1, 1, 0)
+      GameTooltip:AddLine(tooltip, 1, 1, 1, true)
+      GameTooltip:Show()
+    end)
+    b:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+  end
+
+  ------------------------------------------------------------
+  -- 3) Ajout dans votre conteneur AceGUI
+  ------------------------------------------------------------
+  f:AddChild(b)   -- « f » est la frame AceGUI dans votre scope
+  return b
+end
 
   ----------------------------------------------------------------
   --  ligne 1
@@ -1096,7 +1145,6 @@ function NetherBot:PopulateAdminFrame()
   addBtn("Remove",     i18n("Remove_tooltip"), function()
       local tgt = UnitName("target")
       if tgt then
-        -- SendChatMessage(".npcbot remove","SAY")
 		ChatFrame1EditBox:SetText(".npcbot remove")
 		ChatEdit_SendText(ChatFrame1EditBox, 0)		
       else
@@ -1105,29 +1153,23 @@ function NetherBot:PopulateAdminFrame()
       end
     end)
 
---[[  addBtn("Recall",     i18n("Recall_tooltip"), function() 
-		-- SendChatMessage(".npcbot recall","SAY")
-		ChatFrame1EditBox:SetText(".npcbot recall")
-		ChatEdit_SendText(ChatFrame1EditBox, 0)				
-  end)]]
-  addBtn(i18n("Recall"), i18n("Recall_tooltip"), function()
+  addBtn("Recall", i18n("Recall_tooltip"), function()
 	  local tgt = UnitName("target")
 	  if tgt then
 		ChatFrame1EditBox:SetText(".npcbot recall")
 		ChatEdit_SendText(ChatFrame1EditBox, 0)	
 	  else
-		  -- Sinon, message d'erreur en rouge + popup
 		  print("|cffff0000[NetherBot]|r " .. ERR_SELECT_BOT)
 		  StaticPopup_Show("NB_RECALL")
 	  end
 	end)
 
-  addBtn(i18n("Recall_Spawn_Bt"), i18n("Recall_Spawn_tooltip"), function()
+  addBtn("Recall_Spawn_Bt", i18n("Recall_Spawn_tooltip"), function()
 		ChatFrame1EditBox:SetText(".npcbot recall spawns")
 		ChatEdit_SendText(ChatFrame1EditBox, 0)	
 	end)	
 
-  addBtn(i18n("Recall_teleport_Bt"), i18n("Recall_teleport_tooltip"), function()
+  addBtn("Recall_teleport_Bt", i18n("Recall_teleport_tooltip"), function()
 		ChatFrame1EditBox:SetText(".npcbot recall teleport")
 		ChatEdit_SendText(ChatFrame1EditBox, 0)	
 	end)
@@ -1137,13 +1179,12 @@ function NetherBot:PopulateAdminFrame()
   addBtn("Bot-Info",   i18n("Info_tooltip"), function()
       wipe(infoBuffer)
       NetherBot:ShowInfoWindow()
-      -- SendChatMessage(".npcbot info","SAY")
 	  ChatFrame1EditBox:SetText(".npcbot info")
 	  ChatEdit_SendText(ChatFrame1EditBox, 0)	  
       DoEmote("BONK")
     end)
 
-  addBtn("Move",       i18n("Move_tooltip"),
+  addBtn("Move",       i18n("MOVE_TOOLTIP"),
          function() SendChatMessage(".npcbot move","SAY") end)
 
   addBtn("Delete",     i18n("Delete_tooltip"),
@@ -1153,11 +1194,29 @@ function NetherBot:PopulateAdminFrame()
   --  ligne 3
   ----------------------------------------------------------------
   addBtn("Delete Free",i18n("DeleteFree_tooltip"),
-         function() StaticPopup_Show("NB_DEL_FREE_CONFIRM") end, 120)
+         function() StaticPopup_Show("NB_DEL_FREE_CONFIRM") end, 0)
 
   addBtn("CREATE_BOT", i18n("CREATE_BOT_TOOLTIP"),
-         function() NetherBot:ShowCreateBotFrame() end, 120)
+         function() NetherBot:ShowCreateBotFrame() end, 0)
+		 
+  --------------------	Set Free Bouton --------------------------
+  addBtn("Set_Free",     i18n("Set_Free_tooltip"), function()
+      local tgt = UnitName("target")
+      if tgt then
+		ChatFrame1EditBox:SetText(".npcbot free")
+		ChatEdit_SendText(ChatFrame1EditBox, 0)		
+      else
+	    print("|cffff0000[NetherBot]|r " .. ERR_SELECT_BOT)
+        StaticPopup_Show("NB_SET_FREE")
+      end
+    end)
 
+  --------------------	Reload Bouton --------------------------
+  addBtn("Conf_Reload",     i18n("Conf_Reload_tooltip"), function()
+		ChatFrame1EditBox:SetText(".npcbot reloadconfig")
+		ChatEdit_SendText(ChatFrame1EditBox, 0)		
+    end)
+  
   ----------------------------------------------------------------
   --  ligne 4 : Sort de résurrection (icône clickable)
   ----------------------------------------------------------------
@@ -1182,126 +1241,29 @@ end
 --------------------------------------------------------------------
 -- 3) Helper pour (dé)montrer la fenêtre
 --------------------------------------------------------------------
-function NetherBot:ToggleAdminFrame()
+--[[function NetherBot:ToggleAdminFrame()
   local f = self:CreateAdminFrame()
   self:PopulateAdminFrame()
 
   if f.frame:IsShown() then f:Hide() else f:Show() end
-end
-
---------------------------------------------------------------------
---  ANCIENNE FRAME LOOKUP  (choix de classe, spawn rapide)
---------------------------------------------------------------------
---[[local lookupFrame = CreateFrame("Frame", "NetherbotLookupFrame", UIParent)
-lookupFrame:SetSize(180, 500)
--- lookupFrame:SetPoint("CENTER")
-lookupFrame:SetBackdrop({
-  bgFile   = "Interface/Tooltips/UI-Tooltip-Background",
-  edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-  tile     = true, tileSize = 16, edgeSize = 16,
-  insets   = { left = 4, right = 4, top = 4, bottom = 4 }
-})
-lookupFrame:SetBackdropColor(0, 0, 1, 0.25)
-lookupFrame:SetBackdropBorderColor(0, 0, 1, 1)
-lookupFrame:Hide()
--- repositionne dynamiquement à l’ouverture
-lookupFrame:HookScript("OnShow", function(self)
-  self:ClearAllPoints()
-  if adminFrame and adminFrame:IsShown() then
-    -- si admin est visible, colle lookup à sa droite
-    self:SetPoint("TOPLEFT", adminFrame, "TOPRIGHT", 10, 0)
-  elseif NetherBot.gui and NetherBot.gui.frame then
-    -- sinon si la GUI principale est visible, colle lookup à sa droite
-    self:SetPoint("TOPLEFT", NetherBot.gui.frame, "TOPRIGHT", 10, 0)
-  else
-    -- fallback : centre à l’écran
-    self:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+end]]
+function NetherBot:ToggleAdminFrame()
+  -- 1. Si la fenêtre n’existe pas encore : on la crée, on la peuple et on l’affiche
+  if not self.adminAce then
+    local f = self:CreateAdminFrame()
+    self:PopulateAdminFrame()
+    f:Show()
+    return
   end
-end)
 
-lookupFrame:SetMovable(true)
-lookupFrame:EnableMouse(true)
-lookupFrame:RegisterForDrag("LeftButton")
-lookupFrame:SetScript("OnDragStart", lookupFrame.StartMoving)
-lookupFrame:SetScript("OnDragStop",  lookupFrame.StopMovingOrSizing)
-
-local lkTitle = lookupFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-lkTitle:SetPoint("TOP", 0, -6)
-lkTitle:SetText(i18n("Select class"))
-
---  ScrollFrame
-local scroll = CreateFrame("ScrollFrame", "NB_LookupScroll", lookupFrame, "UIPanelScrollFrameTemplate")
-scroll:SetPoint("TOPLEFT", 4, -25)
-scroll:SetPoint("BOTTOMRIGHT", -26, 8)
-
-local list = CreateFrame("Frame", nil, scroll)
-list:SetSize(160, 500)
-scroll:SetScrollChild(list)
-
---  table <Nom FR> = entry
-local classTable = {
-  ["Warrior"]=1, ["Paladin"]=2, ["Hunter"]=3, ["Rogue"]=4, ["Priest"]=5,
-  ["Death Knight"]=6, ["Shaman"]=7, ["Mage"]=8, ["Warlock"]=9, ["Druid"]=11,
-  ["Blademaster"]=12, ["Sphynx"]=13, ["Archmage"]=14, ["Dreadlord"]=15,
-  ["Spellbreaker"]=16, ["DarkRanger"]=17, ["Necromancer"]=18, ["SeaWitch"]=19
-}
-
-local idx = 0
-for cls, id in pairs(classTable) do
-  idx = idx + 1
-  local b = CreateFrame("Button", nil, list, "UIPanelButtonTemplate")
-  b:SetSize(140, 22)
-  b:SetPoint("TOP", 0, -2 - (idx-1)*24)
-  b:SetText(i18n(cls))
-  b:GetNormalTexture():SetVertexColor(0.10,1.00,0.10)
-  -- b:SetScript("OnClick", function() SendChatMessage(".npcbot lookup "..id, "SAY") end)
-  b:SetScript("OnClick", function()
-   NetherBot:StartLookup(id, cls)   -- ← utilise la nouvelle fonction
- end)
+  -- 2. Sinon : simple bascule visible / caché
+  if self.adminAce.frame:IsShown() then
+    self.adminAce:Hide()
+  else
+    self.adminAce:Show()
+  end
 end
 
---  Bouton fermer
-local closeLk = CreateFrame("Button", nil, lookupFrame, "UIPanelButtonTemplate")
-closeLk:SetSize(20, 18)
-closeLk:SetPoint("TOPRIGHT", -6, -6)
-closeLk:SetText("X")
-closeLk:GetNormalTexture():SetVertexColor(1,0.2,0.2)
-closeLk:SetScript("OnClick", function() lookupFrame:Hide() end) ]]
---------------------------------------------------------------------
---  Fenêtre de spawn-bot par ID commentée car ajoutée dans la frame liste des bots
---------------------------------------------------------------------
---[[local spawnFrame = CreateFrame("Frame", nil, lookupFrame)
-   spawnFrame:SetSize(180, 50)
-   spawnFrame:SetPoint("BOTTOM", 0, -60)
-   spawnFrame:SetBackdrop({
-     bgFile="Interface/BUTTONS/WHITE8X8", edgeFile="Interface/BUTTONS/WHITE8X8",
-     edgeSize=1, insets={0,0,0,0}
-   })
-   spawnFrame:SetBackdropColor(0,0,1,0.15)
-   spawnFrame:SetBackdropBorderColor(0,0,1,1)
-   
-   local spTitle = spawnFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-   spTitle:SetPoint("TOPLEFT", 8, -6)
-   spTitle:SetText(i18n("Spawn BOT ID:"))
-  
-   local idBox = CreateFrame("EditBox", nil, spawnFrame, "InputBoxTemplate")
-   idBox:SetSize(70,18)
-   idBox:SetPoint("BOTTOMLEFT", 10, 8)
-   idBox:SetAutoFocus(false)
-   
-   local spBtn = CreateFrame("Button", nil, spawnFrame, "UIPanelButtonTemplate")
-   spBtn:SetSize(70,20)
-   spBtn:SetPoint("LEFT", idBox, "RIGHT", 6, 0)
-   spBtn:SetText(i18n("Spawn"))
-   spBtn:GetNormalTexture():SetVertexColor(0.10,1.00,0.10)
-   spBtn:SetScript("OnClick", function()
-     local id = idBox:GetText()
-     if id ~= "" then
-       SendChatMessage(".npcbot spawn "..id, "SAY")
-       idBox:SetText("")
-       idBox:ClearFocus()
-     end
-   end) ]]
 --------------------------------------------------------------------
 --  FRAME LOOKUP AceGUI
 --------------------------------------------------------------------
@@ -1319,6 +1281,26 @@ function NetherBot:CreateLookupFrame()
   if self.lookupAce then                       -- déjà construit ?
     return self.lookupAce
   end
+function NetherBot:ToggleLookupFrame()
+  --------------------------------------------------------------------
+  -- 1) 1er appel : la fenêtre n'existe pas encore ⇒ on la crée
+  --------------------------------------------------------------------
+  if not self.lookupAce then
+    local f = self:CreateLookupFrame()   -- construit + remplit la frame
+    self.lookupAce = f                   -- mémo (au cas où Create… ne l’a pas déjà fait)
+    f:Show()                             -- on l’affiche immédiatement
+    return                               -- …et on sort
+  end
+
+  --------------------------------------------------------------------
+  -- 2) Appels suivants : simple bascule
+  --------------------------------------------------------------------
+  if self.lookupAce.frame:IsShown() then
+    self.lookupAce:Hide()                -- actuellement visible → on cache
+  else
+    self.lookupAce:Show()                -- actuellement caché  → on montre
+  end
+end
 
   local AceGUI = LibStub("AceGUI-3.0")
 
@@ -1374,10 +1356,28 @@ end
 -- -----------------------------------------------------------------
 --  Petit helper pour ouvrir/fermer
 -- -----------------------------------------------------------------
-function NetherBot:ToggleLookupFrame()
+--[[function NetherBot:ToggleLookupFrame()
   local f = self:CreateLookupFrame()
   if f.frame:IsShown() then f:Hide() else f:Show() end
+end]]
+-----------------------------------------------------------------
+--  Basculer visible/caché
+-----------------------------------------------------------------
+function NetherBot:ToggleLookupFrame()
+  -- 1) premier appel : on crée la fenêtre puis on l'affiche
+  if not self.lookupAce then
+    self:CreateLookupFrame():Show()
+    return
+  end
+
+  -- 2) appels suivants : simple on/off
+  if self.lookupAce.frame:IsShown() then
+    self.lookupAce:Hide()
+  else
+    self.lookupAce:Show()
+  end
 end
+
 
 --------------------------------------------------------------------
 --  RAID FRAME (TeamFrame) – code original conservé

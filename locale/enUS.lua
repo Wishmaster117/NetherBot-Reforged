@@ -2,50 +2,195 @@
 local L = LibStub("AceLocale-3.0"):NewLocale("NetherBot", "enUS", true)
 if not L then return end    -- devient la locale par défaut
 
+L["Version"] = "v. Beta 2"
 L["NetherBot"]           = "NetherBot"
 L["Hide"]                = "Hide"
-L["NetherBot_title"]     = "NetherBot – NPC BOT Tool"
+L["UnHide"]              = "Show"
 L["Follow"]              = "Follow"
-L["Stand"]               = "Stand"
+L["Stand"]               = "Stay"
 L["Stop"]                = "Stop"
-L["Slack"]               = "Slack"
-L["UnHide"]              = "UnHide"
+L["Slack"]               = "Passive"
 L["Recall"]              = "Recall"
 L["Unbind"]              = "Unbind"
-L["Spawn"]               = "Spawn"
-L["Spawn Bot"]           = "Spawn Bot"
+L["Spawn"]               = "Summon"
+L["Spawn Bot"]           = "Summon Bot"
 L["Revive"]              = "Revive"
-L["Admin"]               = "Admin"
-L["Entry ID"]            = "Entry ID"
-L["Enter NPCBOT ID:"]    = "Enter NPCBOT ID:"
 L["Revive Bots"]         = "Revive Bots"
+L["Admin"]               = "Admin"
+L["Entry ID"]            = "Bot ID"
+L["Enter NPCBOT ID:"]    = "Enter NPCBOT ID:"
 L["Select class"]        = "Select class"
-L["Spawn BOT ID:"]       = "Spawn BOT ID:"
-L["Lookup"] = true
--- ### Missing entries for English ###
-L["NetherBot"]    = true
-L["Add"]          = true
-L["Remove"]       = true
-L["Bot-Info"]     = true
-L["Move"]         = true
-L["Delete"]       = true
-L["Rogue"]        = true
-L["Spellbreaker"] = true
-L["Archmage"]     = true
-L["Dreadlord"]    = true
-L["Warrior"] = true
-L["Paladin"] = true
-L["Hunter"] = true
-L["Rogue"] = true
-L["Priest"] = true
-L["Death Knight"] = true
-L["Shaman"] = true 
-L["Mage"] = true 
-L["Warlock"] = true
-L["Druid"] = true
-L["Blademaster"] = true
-L["Sphynx"]= true
-L["DarkRanger"] = true
-L["Necromancer"] = true 
-L["SeaWitch"] = true
-L["Revive Bots"] = true
+-- L["Spawn BOT ID:"]       = "ID of the bot to summon:"
+L["NetherBot_title"]     = "NetherBot – Tool for Trickerer NPCBOT by TheWarlock"
+L["Add"]                 = "Add"
+L["Remove"]              = "Remove"
+L["Bot-Info"]            = "Bot Info"
+L["Move"]                = "Move"
+L["Delete"]              = "Delete"
+L["Rogue"]               = "Rogue"
+L["Spellbreaker"]        = "Spellbreaker"
+L["Archmage"]            = "Archmage"
+L["Dreadlord"]           = "Dreadlord"
+L["Lookup"]              = "Summon a Bot"
+L["RaidFrame"]           = "Raid View"
+L["Dist 30"]             = "Dist 30"
+L["Dist 50"]             = "Dist 50"
+L["Dist 85"]             = "Dist 85"
+L["FILL_ID_FIELD"]       = "|cffff0000[NetherBot]|r Please fill in the ID field."
+L["B_INVOQUER"]          = "Summon"
+L["INVOQUER_TOOLTIP"]    = "Click to summon this bot near you."
+L["LOOKUP_ID_LABEL"]     = "BOT ID"
+L["LOOKUP_NAME_LABEL"]   = "Name"
+L["LOOKUP_RACE_LABEL"]   = "Race"
+L["LOOKUP_STATUS"]       = "List of available Bots you can summon"
+
+L["Recall_Spawn_Bt"]         = "Move to Spawn"
+L["Recall_Spawn_tooltip"]    = "Forces all your inactive bots to teleport to their spawn points immediately"
+L["Recall_teleport_Bt"]      = "Teleport to Player"
+L["Recall_teleport_tooltip"] = "Teleports all your bots to your current location"
+
+L["Spawn_bot_by_ID"] = "Summon a Bot by its ID"
+
+L["Warrior"]      = "Warrior"
+L["Paladin"]      = "Paladin"
+L["Hunter"]       = "Hunter"
+L["Rogue"]        = "Rogue"
+L["Priest"]       = "Priest"
+L["Death Knight"] = "Death Knight"
+L["Shaman"]       = "Shaman"
+L["Mage"]         = "Mage"
+L["Warlock"]      = "Warlock"
+L["Druid"]        = "Druid"
+L["Blademaster"]  = "Blademaster"
+L["Sphynx"]       = "Sphynx"
+L["DarkRanger"]   = "Dark Ranger"
+L["Necromancer"]  = "Necromancer"
+L["SeaWitch"]     = "Sea Witch"
+L["Revive Bots"]  = "Revive Bots"
+
+-- Tooltips
+L["Follow_tooltip"]     = "Makes the bot follow you"
+L["Stand_tooltip"]      = "Makes the bot stop following you"
+L["Stop_tooltip"]       = "Stops all actions of the bot"
+L["Slack_tooltip"]      = "Bot will follow you at a relaxed distance"
+L["UnHide_tooltip"]     = "Shows all bots you previously hid"
+L["Hide_tooltip"]       = "Hides all your bots from view"
+L["Unbind_tooltip"]     = "Releases the bot; it will no longer belong to you"
+L["Dist_30_tooltip"]    = "Sets bot follow distance to 30 meters"
+L["Dist_50_tooltip"]    = "Sets bot follow distance to 50 meters"
+L["Dist_85_tooltip"]    = "Sets bot follow distance to 85 meters"
+L["Spanw_bot_tooltip"]  = "Opens the window to summon a bot by entering its ID"
+L["Revive_tooltip"]     = "Revives all your bots that have fallen in combat"
+
+L["Admin_tooltip"]      = "Opens the admin panel to manage your bots (add, remove, info, etc.)"
+L["Lookup_tooltip"]     = "Opens the search window to select a class or quickly summon a bot by ID"
+L["Raidframe_tooltip"]  = "Shows the raid window to monitor health and mana of raid members"
+
+L["Add_tooltip"]        = "Adds the targeted bot to your group"
+L["Remove_tooltip"]     = "If targeting a player: removes all their bots\nIf targeting a bot: removes only that bot"
+L["Recall_tooltip"]     = "If targeting a player: recalls all bots to their location\nIf targeting a bot: recalls that bot to you"
+L["Info_tooltip"]       = "Displays detailed information about the bot in the Info window"
+L["MOVE_TOOLTIP"]       = "Orders the targeted bot to move to your side"
+L["Delete_tooltip"]     = "Permanently deletes the targeted bot or by ID"
+L["Delete Free"]        = "Delete Free Bots"
+L["DeleteFree_tooltip"] = "Deletes all free (unbound) bots present in the world"
+L["ConfirmDeleteFree"]  = "Are you sure you want to delete all free bots?"
+L["Error_SelectBot"]    = "Please select a bot."
+
+-- Bot Creation
+
+L["CREATE_BOT"]         = "Create Bot"
+L["CREATE_BOT_TOOLTIP"] = "Opens the NPCBot creation window"
+L["BOT_NAME"]           = "Bot Name"
+L["BOT_CLASS"]          = "Bot Class"
+L["BOT_RACE"]           = "Bot Race"
+L["BOT_GENDER"]         = "Gender"
+L["BOT_SKIN"]           = "Skin"
+L["BOT_FACE"]           = "Face"
+L["BOT_HAIRSTYLE"]      = "Hairstyle"
+L["BOT_HAIRCOLOR"]      = "Hair Color"
+L["BOT_FEATURES"]       = "Features"
+L["BOT_SOUNDSET"]       = "Soundset"
+L["BOT_NAME_TOOLTIP"]   = "First character uppercase, spaces = _"
+L["BOT_CREATE_TITLE"]   = "NPCBot Creation"
+L["BOT_CREATE8BUTTON"]  = "Create"
+L["BOT_FEATURES_TOOLTIP"] = "Male: beards, mustaches, sideburns, horns (taurens), decorated tusks (trolls)... Female: earrings, piercings, forehead jewels, horns (draenei)..."
+
+L["CLASS_WARRIOR"]       = "Warrior"
+L["CLASS_PALADIN"]       = "Paladin"
+L["CLASS_HUNTER"]        = "Hunter"
+L["CLASS_ROGUE"]         = "Rogue"
+L["CLASS_PRIEST"]        = "Priest"
+L["CLASS_DEATHKNIGHT"]   = "Death Knight"
+L["CLASS_SHAMAN"]        = "Shaman"
+L["CLASS_MAGE"]          = "Mage"
+L["CLASS_WARLOCK"]       = "Warlock"
+L["CLASS_DRUID"]         = "Druid"
+L["CLASS_BLADEMASTER"]   = "Blademaster"
+L["CLASS_SPHYNX"]        = "Sphynx"
+L["CLASS_ARCHMAGE"]      = "Archmage"
+L["CLASS_DREADLORD"]     = "Dreadlord"
+L["CLASS_SPELLBREAKER"]  = "Spellbreaker"
+L["CLASS_DARKRANGER"]    = "Dark Ranger"
+L["CLASS_NECROMANCER"]   = "Necromancer"
+L["CLASS_SEAWITCH"]      = "Sea Witch"
+
+L["RACE_HUMAN"]    = "Human"
+L["RACE_ORC"]      = "Orc"
+L["RACE_DWARF"]    = "Dwarf"
+L["RACE_NIGHTELF"] = "Night Elf"
+L["RACE_UNDEAD"]   = "Undead"
+L["RACE_TAUREN"]   = "Tauren"
+L["RACE_GNOME"]    = "Gnome"
+L["RACE_TROLL"]    = "Troll"
+L["RACE_BLOODELF"] = "Blood Elf"
+L["RACE_DRAENEI"]  = "Draenei"
+
+L["GENDER_MALE"]   = "Male"
+L["GENDER_FEMALE"] = "Female"
+
+L["SOUNDSET_DEFAULT"]  = "Standard Voice"
+L["SOUNDSET_VARIANT1"] = "Voice Variant 1"
+L["SOUNDSET_VARIANT2"] = "Voice Variant 2"
+
+L["SUMMARY_HEADER"]       = "Here are your new bot's characteristics"
+L["SUMMARY_NAME_LABEL"]   = "Name"
+L["SUMMARY_CLASS_LABEL"]  = "Class"
+L["SUMMARY_RACE_LABEL"]   = "Race"
+L["SUMMARY_GENDER_LABEL"] = "Gender"
+L["SUMMARY_SKIN_LABEL"]   = "Skin"
+L["SUMMARY_FACE_LABEL"]   = "Face"
+L["SUMMARY_HAIR_LABEL"]   = "Hair"
+L["SUMMARY_COLOR_LABEL"]  = "Color"
+L["SUMMARY_FEAT_LABEL"]   = "Features"
+L["SUMMARY_SS_LABEL"]     = "Voice"
+
+L["NAME_UNDERSCORE"] = "|cffff0000[NetherBot]|r Replace spaces with underscores (_) in the name."
+L["NAME_CAPS"]       = "|cffff0000[NetherBot]|r The name must start with a capital letter."
+L["ERROR_MISSING_FIELDS"] = "You must select: %s"
+L[""] = ""
+L[""] = ""
+L[""] = ""
+
+-- Other Commands Window
+L["OTHER_COMMANDS"] = "Other Commands"
+L["OTHER_COMMANDS_TOOLTIP"] = "Opens the window with other commands"
+L["LIST_SPAWNED"] = "List Spawned Bots"
+L["LIST_SPAWNED_TOOLTIP"] = "Displays all currently spawned bots."
+L["LIST_SPAWNED_FREE"] = "List Free Spawned"
+L["LIST_SPAWNED_FREE_TOOLTIP"] = "Displays all spawned and unbound bots (owner = 0)."
+L["BOT_ID"]         = "BOT ID"
+L["NAME_LABEL"]     = "Name"
+L["CLASS_LABEL"]    = "Class"
+L["LEVEL_LABEL"]    = "Level"
+L["LOCATION_LABEL"] = "Location"
+L["STATE_LABEL"]    = "State"
+L["Set_Free"] = "Set Free"
+L["Set_Free_tooltip"] = "Releases the bot but leaves it in the world"
+L["Bot_Go"] = "Go"
+L["Bot_Go_tooltip"] = "Teleports you to the bot's current location"
+L["GearScore"] = "Bot GearScore"
+L["GearScore_tooltip"] = "Displays the selected bot’s GearScore"
+L["Conf_Reload"] = "Reload Config"
+L["Conf_Reload_tooltip"] = "Reloads the Bot Configuration"
+
