@@ -190,3 +190,8 @@ L["GearScore"] = "GearScore du Bot"
 L["GearScore_tooltip"] = "Affiche le GearScore du bot selectionné"
 L["Conf_Reload"] = "Recharger Config"
 L["Conf_Reload_tooltip"] = "Recharge la Configuration des Bots"
+
+-- Nouvelles à ajouter dans les autres langues:
+L["SHOW_BOT_PARTY"] = "Bots (groupe)"
+L["SHOW_BOT_PARTY_TOOLTIP"] = "Affiche la liste des bots actuellement avec vous."
+L["BOT_PARTY_TITLE"] = "Votre Groupe"
