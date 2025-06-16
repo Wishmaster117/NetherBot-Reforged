@@ -2,7 +2,7 @@
 local L = LibStub("AceLocale-3.0"):NewLocale("NetherBot", "esMX")
 if not L then return end
 
-L["Version"] = "v. Beta 2"
+L["Version"] = "v.2.1"
 L["NetherBot"]           = "NetherBot"
 L["Hide"]                = "Ocultar"
 L["UnHide"]              = "Mostrar"

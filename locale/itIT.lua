@@ -1,7 +1,7 @@
 local L = LibStub("AceLocale-3.0"):NewLocale("NetherBot", "itIT")
 if not L then return end          -- le client n'est pas en itIT
 
-L["Version"] = "v. Beta 2"
+L["Version"] = "v.2.1"
 L["NetherBot"]           = "NetherBot"
 L["Hide"]                = "Nascondi"
 L["UnHide"]              = "Mostra"

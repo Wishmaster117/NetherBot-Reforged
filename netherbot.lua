@@ -329,6 +329,10 @@ local otherBuffer      = {}    -- stocke chaque ligne “list spawned…”
 local otherFrame       = nil   -- la fenêtre Ace
 local otherContainer   = nil   -- le ScrollFrame interne
 
+-- Variables pour LOOKUP
+local LOOKUP_PAGE_SIZE = 20
+local lookupPage       = 1
+
 -- utilitaires
 local function trim(s)  return (s:gsub("^%s*(.-)%s*$","%1")) end
 
@@ -418,6 +422,9 @@ if id and name then
 
   -- 4) Zone texte (EditBox figé)
   local eb = AceGUI:Create("EditBox")
+  -- Force la taille de police à 10
+  local font, _, flags = eb.editbox:GetFont()
+  eb.editbox:SetFont(font, 10, flags)
   eb:SetLabel( i18n("LOOKUP_ID_LABEL").." : "..id )
   local nomLabel  = i18n("LOOKUP_NAME_LABEL")  ..": ".. name
   local raceLabel = i18n("LOOKUP_RACE_LABEL") ..": ".. (race ~= "" and race or "—")
@@ -627,9 +634,94 @@ function NetherBot:AddSpawnedWidget(line)
 end
 
 --------------------------------------------------------------------
---  FRAME D'AFFICHAGE DE LA CAPTURE DE LA LISTE DES BOTS
+--  FRAME D'AFFICHAGE DE LA CAPTURE DE LA LISTE DES BOTS AVEC PAGINATION
 --------------------------------------------------------------------
 function NetherBot:ShowLookupWindow(title)
+  if not self.lookupFrame then
+    local f = AceGUI:Create("Frame")
+    f:SetTitle(title or "Lookup-List")
+    -- f:SetLayout("Flow")
+	f:SetLayout("List")
+    f:SetWidth(520); f:SetHeight(460)
+    f:SetCallback("OnClose", function(w)
+      AceGUI:Release(w)
+      self.lookupFrame, self.lookupContainer = nil, nil
+    end)
+
+    -- ScrollFrame
+    local scroll = AceGUI:Create("ScrollFrame")
+    scroll:SetLayout("List")
+    scroll:SetFullWidth(true)
+	-- scroll:SetFullHeight(true)
+	scroll:SetHeight(420 - 30 - 30 - 20)
+	-- 440 = hauteur totale
+	-- -30 titre
+	-- -22 barre de statut
+	-- -60 pager + label
+    f:AddChild(scroll)
+
+	-- Prev / Next + info de page
+    local btnPrev = AceGUI:Create("Button")
+    btnPrev:SetText("Prev.")
+	btnPrev:SetWidth(60)
+    btnPrev:SetCallback("OnClick", function()
+      if lookupPage > 1 then lookupPage = lookupPage - 1 end
+      self:RefreshLookup()
+    end)
+    local btnNext = AceGUI:Create("Button")
+    btnNext:SetText("Next")
+	btnNext:SetWidth(60)
+    btnNext:SetCallback("OnClick", function()
+      local maxp = math.ceil(#lookupBuffer / LOOKUP_PAGE_SIZE)
+      if lookupPage < maxp then lookupPage = lookupPage + 1 end
+      self:RefreshLookup()
+    end)
+    local pager = AceGUI:Create("SimpleGroup")
+    pager:SetLayout("Flow")
+    pager:AddChild(btnPrev); pager:AddChild(btnNext)
+    f:AddChild(pager)
+
+    -- Label pour le numéro de page
+    local pageInfo = AceGUI:Create("Label")
+    pageInfo:SetFullWidth(true)
+    f:AddChild(pageInfo)
+
+    -- stocker pour mise à jour dans RefreshLookup
+    self.lookupPager, self.lookupPageInfo = pager, pageInfo
+
+    self.lookupFrame, self.lookupContainer = f, scroll
+  else
+    self.lookupFrame:SetTitle(title or "Lookup-List")
+  end
+
+  lookupPage = 1
+  self:RefreshLookup()
+  self.lookupFrame:Show()
+end
+
+-- reconstruit la page courante à partir du buffer
+function NetherBot:RefreshLookup()
+  self.lookupContainer:ReleaseChildren()
+  
+  -- calcul du nombre total de pages (au moins 1)
+  local totalPages = math.max(1, math.ceil(#lookupBuffer / LOOKUP_PAGE_SIZE))
+
+  local startIdx = (lookupPage-1)*LOOKUP_PAGE_SIZE + 1
+  local endIdx   = math.min(#lookupBuffer, lookupPage*LOOKUP_PAGE_SIZE)
+  for i = startIdx, endIdx do
+    self:AddLookupWidget(lookupBuffer[i])
+  end
+   -- mettre à jour le label “Page X / Y”
+   if self.lookupPageInfo then
+    self.lookupPageInfo:SetText( string.format("Page %d / %d", lookupPage, totalPages) )
+   end
+end
+
+
+--------------------------------------------------------------------
+--  FRAME D'AFFICHAGE DE LA CAPTURE DE LA LISTE DES BOTS
+--------------------------------------------------------------------
+--[[function NetherBot:ShowLookupWindow(title)
   if not self.lookupFrame then
     local f = AceGUI:Create("Frame")
     f:SetTitle(title or "Lookup-List")
@@ -653,7 +745,7 @@ function NetherBot:ShowLookupWindow(title)
     self:AddLookupWidget(ln)
   end
   self.lookupFrame:Show()
-end
+end]]
 
 --------------------------------------------------------------------
 --  Capture des messages affichés dans la fenêtre de chat
@@ -665,10 +757,15 @@ function NetherBot:OnChatMsg(_, msg)
   end
   
   -- Lookup-window
-  if self.lookupContainer then
+  --[[if self.lookupContainer then
     table.insert(lookupBuffer, msg)
     self:AddLookupWidget(msg)
+  end]]
+  if self.lookupContainer then
+    table.insert(lookupBuffer, msg)
+    self:RefreshLookup()    -- ← voilà l’appel qui manquait
   end
+  
   -- Liste spawned
   if otherContainer then
   -- on garde tout (pour réafficher plus tard)…

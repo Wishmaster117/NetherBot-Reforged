@@ -1,7 +1,7 @@
 local L = LibStub("AceLocale-3.0"):NewLocale("NetherBot", "zhCN")
 if not L then return end          -- le client n'est pas en zhCN
 
-L["Version"] = "v. Beta 2"
+L["Version"] = "v.2.1"
 L["NetherBot"] = "NetherBot"
 L["Hide"] = "隐藏"
 L["UnHide"] = "显示"
